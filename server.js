@@ -21,6 +21,7 @@ app.post("/upload", function(req, res, next)
 		, req.files.video.name
 		, req.files.video.size / 1024 | 0
 		, req.files.video.path));
+	console.log(req.files.video.name + " " + req.files.video.size + " " + req.files.video.path);
 });
 
 app.listen(9999);
