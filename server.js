@@ -1,10 +1,11 @@
 var express=require("express")
-var server=express()
+var app=express()
 
-server.get("/", function(request, response)
+app.get("/", function(req, res, next)
 {
-	response.type("text/plain");
-	response.send("hello world");
+	res.type("text/plain");
+	res.send("hello world");
 });
 
-server.listen(9999);
+app.listen(9999);
+console.log("Server started");
