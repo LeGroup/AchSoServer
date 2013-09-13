@@ -1,18 +1,10 @@
-var http=require("http");
-var url=require("url");
+var express=require("express")
+var server=express()
 
-function start(route)
+server.get("/", function(request, response)
 {
-	function onRequest(request, response)
-	{
-		var path=url.parse(request.url).pathname;
-		route(path);
+	response.type("text/plain");
+	response.send("hello world");
+});
 
-		response.writeHead(200, {"Content-Type": "text/plain"});
-		response.write("Hello");
-		response.end();
-	}
-	http.createServer(onRequest).listen(9999);
-}
-
-exports.start=start;
+server.listen(9999);
