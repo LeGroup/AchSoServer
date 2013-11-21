@@ -1,18 +1,26 @@
+require("buffer");
 var express=require("express"),
 	format=require("util").format,
 	mongoose=require("mongoose"),
-	fs=require("fs");
+	fs=require("fs"),
+	libxml=require("libxmljs"),
+	multiparty=require("multiparty"),
+	url=require("url"),
+	http=require("http");
 var app=express();
+var server=http.createServer(app);
+require("buffer");
 
-app.use(express.bodyParser()); // For parsing multipart form data
+app.use(express.urlencoded());
+app.use(express.json());
 
 app.get("/", function(req, res, next)
 {
 	res.type("text/plain");
-	res.send("hello world");
+	res.send("");
 });
 
-mongoose.connect("mongodb://127.0.0.1/mongodb");
+mongoose.connect("mongodb://127.0.0.1/achso");
 var db=mongoose.connection;
 db.on("error", console.error.bind(console, "MongoDB error:"));
 db.once("open", main);
@@ -21,32 +29,104 @@ function main()
 {
 	var schema=mongoose.Schema({
 		xml: String,
-		video: Buffer,
-		created_at: Date
-		//genre: String
+		filename: String,
+		path: String,
+		created_at: Date,
+		title: String,
+		genre: String,
+		creator: String
 	});
 	var SemanticVideo=mongoose.model("SemanticVideo", schema);
 	console.log("Database ok");
 
 	app.post("/upload", function(req, res, next)
 	{
-		console.log(req);
-		var video=new SemanticVideo({
-			xml: req.files.video.xml,
-			video: (function() {
-				console.log("Reading file...");
-				var buf=fs.readFileSync(req.files.video.path, {encoding: null});
-				fs.unlinkSync(req.files.video.path);
-				return buf;
-			})(),
-			created_at: Date.now()
-			//genre: req.files.video.genre
-		});
-		console.log("Adding new video to database:\nTitle: " + video.title + "\nGenre: " + video.genre);
-		video.save();
-		console.log(req.files.video.name + " " + req.files.video.size + " " + req.files.video.path);
+		if(req.is("multipart/form-data"))
+		{
+			var form=new multiparty.Form({
+				uploadDir: "videos"
+			});
+			form.parse(req, function(err,fields,files)
+			{
+				parse_video_data(req,err,fields,files);
+			});
+			res.send("OK");
+		}
 	});
 
-	app.listen(9999);
+	app.get("/search", function(req, res)
+	{
+		if(req.query.title)
+		{
+			var jsonobj={searchResult: []};
+			var ret=[];
+			SemanticVideo.where("title").regex(new RegExp(req.query.title, "i")).exec(function(err, svs)
+			{
+				console.log("Search with title '" + req.query.title + "' hit " + svs.length + " videos.");
+				for(var i=0, len=svs.length; i<len; ++i)
+				{
+					ret.push({
+						xml: svs[i].xml
+					});
+				}
+				jsonobj.searchResult=ret;
+				var json=JSON.stringify(jsonobj);
+				res.type("application/json");
+				res.send(json);
+			});
+		}
+		else
+		{
+			var obj={searchResult: []};
+			var json=JSON.stringify(obj);
+			res.type("application/json");
+			res.send(json);
+		}
+	});
+
+	app.get("/watch/:video", function(req, res)
+	{
+		var root="./videos/";
+		if(fs.existsSync(root + req.params.video))
+		{
+			console.log("Playing video " + req.params.video);
+			res.sendfile(req.params.video, {root: "./videos/"});
+		}
+		else res.send(":(");
+	});
+
+	server.listen(9999);
 	console.log("Server started");
+
+	function parse_video_data(req, err, fields, files)
+	{
+		console.log(fields);
+		var video=new SemanticVideo({
+			xml: fields.xml[0],
+			filename: files.video[0].path.split("/").pop(),
+			path: files.video[0].path,
+			created_at: Date.now(),
+			title: null,
+			genre: null,
+			creator: null
+		});
+
+		var xmld=new libxml.parseXml(video.xml);
+		video.title=xmld.get("title").text();
+		video.genre=xmld.get("genre").text();
+		video.creator=xmld.get("creator").text();
+
+		// Replace local video_uri with server's uri
+		var uri=url.format({
+			protocol: req.protocol,
+			hostname: req.host,
+			port: server.address().port,
+			pathname: "watch/" + video.filename
+		});
+		xmld.get("video_uri").text(uri);
+		video.xml=xmld.toString(false); // Do not format the xml output
+
+		console.log("Adding new video to database:\nTitle: " + video.title + "\nGenre: " + video.genre);
+		video.save();
+	}
 }
