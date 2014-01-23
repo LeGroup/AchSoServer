@@ -41,6 +41,7 @@ function main()
 
 	app.post("/upload", function(req, res, next)
 	{
+		console.log("Upload");
 		if(req.is("multipart/form-data"))
 		{
 			var form=new multiparty.Form({
@@ -93,6 +94,33 @@ function main()
 			res.sendfile(req.params.video, {root: "./videos/"});
 		}
 		else res.send(":(");
+	});
+
+	app.get("/player", function(req, res)
+	{
+		SemanticVideo.find().exec(function(err, videos)
+		{
+			res.writeHead(200);
+			console.log(videos);
+			res.write("<!DOCTYPE html><html><head></head><body>");
+			res.write("<ul>");
+			for(var i=0, len=videos.length; i<len; ++i)
+			{
+				res.write("<li>" + videos[i].path + "</li>");
+			}
+			res.write("</body></ul>");
+			res.end();
+		});
+	});
+
+	app.get("/player/:video", function(req, res)
+	{
+		fs.readFile("player.html", "binary", function(err, file)
+		{
+			res.writeHead(200);
+			res.write(file, "binary");
+			res.end();
+		});
 	});
 
 	server.listen(9999);
