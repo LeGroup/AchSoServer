@@ -33,8 +33,8 @@ $(function()
 				{
 					annotations[i].dom.show();
 					annotations[i].dom.css({
-						left: $("#semanticvideo").outerWidth(true) * parseFloat(annotations[i].x_position),
-						top:  $("#semanticvideo").outerHeight(true) * parseFloat(annotations[i].y_position)
+						left: $("#semanticvideo").outerWidth(true) * parseFloat(annotations[i].x_position) - (annotations[i].dom.outerWidth(true)/2),
+						top:  $("#semanticvideo").outerHeight(true) * parseFloat(annotations[i].y_position) - (annotations[i].dom.outerHeight(true)/2)
 					});
 					$("#subtitles").text(annotations[i].text);
 				} else annotations[i].dom.hide();
@@ -42,6 +42,7 @@ $(function()
 		}
 		player=videojs("semanticvideo", {width: "auto", height: "auto"}, function()
 		{
+			$("#semanticvideo").append("<p id='subtitles'/>");
 			for(var i=0; i<annotations.length; ++i)
 			{
 				annotations[i]["dom"]=$("<div class='annotation'></div>");

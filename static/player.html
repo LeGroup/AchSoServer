@@ -10,19 +10,27 @@
 		<script src="../player.js"></script>
 		<style type="text/css">
 			.annotation {
-				width: 40px;
-				height: 40px;
-				position: relative;
+				width: 32px;
+				height: 32px;
+				position: absolute;
 				left: 0;
 				top: 0;
 				display: inline-block;
 				background-image: url("/annotation_.png")
+			}
+			#subtitles {
+				position: absolute;
+				width: 100%;
+				bottom: 0;
+				text-align: center;
+				font-size: 32pt;
+				color: yellow;
+				text-shadow: black 1px 1px 1px;
 			}
 		</style>
 	</head>
 	<body>
 		<video id="semanticvideo" class="video-js vjs-default-skin" controls preload="auto">
 		</video>
-		<p id="subtitles"></p>
 	</body>
 </html>
