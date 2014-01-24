@@ -93,7 +93,11 @@ function main()
 			console.log("Playing video " + req.params.video);
 			res.sendfile(req.params.video, {root: "./videos/"});
 		}
-		else res.send(":(");
+		SemanticVideo.findById(req.params.video, function(err, video)
+		{
+			if(err) res.send(":(");
+			else res.sendfile(video.path);
+		});
 	});
 
 	app.get("/player", function(req, res)
@@ -101,26 +105,74 @@ function main()
 		SemanticVideo.find().exec(function(err, videos)
 		{
 			res.writeHead(200);
-			console.log(videos);
 			res.write("<!DOCTYPE html><html><head></head><body>");
 			res.write("<ul>");
 			for(var i=0, len=videos.length; i<len; ++i)
 			{
-				res.write("<li>" + videos[i].path + "</li>");
+				res.write("<li><a href='/player/" + videos[i]._id + "'>" + videos[i].title + "</a></li>");
 			}
-			res.write("</body></ul>");
+			res.write("</ul></body>");
 			res.end();
 		});
 	});
 
 	app.get("/player/:video", function(req, res)
 	{
-		fs.readFile("player.html", "binary", function(err, file)
+		fs.readFile("static/player.html", "binary", function(err, file)
 		{
 			res.writeHead(200);
 			res.write(file, "binary");
 			res.end();
 		});
+	});
+
+	app.get("/player/:videoid/annotations.json", function(req, res)
+	{
+		SemanticVideo.findById(req.params.videoid, function(err, video)
+		{
+			var xmld=libxml.parseXmlString(video.xml);
+			var obj={};
+			var children=xmld.root().childNodes();
+			for(var i=0; i<children.length; ++i)
+			{
+				switch(children[i].name())
+				{
+					case "annotations":
+					{
+						obj["annotations"]=[];
+						var subchildren=children[i].childNodes();
+						for(var j=0; j<subchildren.length; ++j)
+						{
+							var subobj={};
+							var subsubchildren=subchildren[j].childNodes();
+							for(var k=0; k<subsubchildren.length; ++k)
+							{
+								subobj[subsubchildren[k].name()] = subsubchildren[k].text();
+							}
+							obj["annotations"].push(subobj);
+						}
+					}
+					break;
+
+					case "thumb_image": break;
+
+					default:
+						obj[children[i].name()] = children[i].text();
+						break;
+				}
+			}
+			res.json(200, obj.annotations);
+		});
+	});
+
+	app.get("*", function(req, res)
+	{
+		var root="./static";
+		if(fs.existsSync(root + req.params[0]))
+		{
+			res.sendfile(req.params[0], {root: root});
+		}
+		else res.send(404);
 	});
 
 	server.listen(9999);
