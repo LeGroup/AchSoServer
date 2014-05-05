@@ -28,15 +28,31 @@ db.once("open", main);
 
 function main()
 {
+	// var schema=mongoose.Schema({
+	// 	xml: String,
+	// 	filename: String,
+	// 	path: String,
+	// 	created_at: Date,
+	// 	title: String,
+	// 	genre: String,
+	// 	creator: String
+	// });
 	var schema=mongoose.Schema({
-		xml: String,
-		filename: String,
-		path: String,
-		created_at: Date,
+		json: String,
 		title: String,
+		creator: String,
+		qr_code: String,
+		created_at: Number,
+		video_uri: String,
 		genre: String,
-		creator: String
+		key: String,
+		latitude: Number,
+		longitude: Number,
+		accuracy: Number,
+		duration: Number,
+		thumb_uri: String
 	});
+
 	var SemanticVideo=mongoose.model("SemanticVideo", schema);
 	console.log("Database ok");
 
@@ -193,10 +209,32 @@ function main()
 	console.log("Server started");
 
 
-	function parse_json_data(req, json)
+	function parse_json_data(req, data)
 	{
-		console.log(json);
-		obj = JSON.parse(json);
+		console.log(data);
+		// first we should check if there is semantic object with same key.
+		// if such exists, update it with new values.
+		// if not, then we create new object.
+
+		var video = new SemanticVideo({
+			json: data,
+			title: data.title,
+			creator: data.creator,
+			qr_code: data.qr_code,
+			created_at: data.created_at,
+			video_uri: data.video_uri,
+			genre: data.genre,
+			key: data.key,
+			latitude: data.latitude,
+			longitude: data.longitude,
+			accuracy: data.accuracy,
+			duration: data.duration,
+			thumb_uri: data.thumb_uri
+		})
+		console.log("Adding new video to database:\nTitle: " + video.title + "\nGenre: " + video.genre);
+		video.save();
+
+
 		// var video=new SemanticVideo({
 		// 	json: json,
 		// 	filename: files.video[0].path.split("/").pop(),
@@ -222,8 +260,6 @@ function main()
 		// xmld.get("video_uri").text(uri);
 		// video.xml=xmld.toString(false); // Do not format the xml output
 
-		// console.log("Adding new video to database:\nTitle: " + video.title + "\nGenre: " + video.genre);
-		// video.save();
 	}
 
 	function parse_video_data(req, err, fields, files)
