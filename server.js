@@ -13,6 +13,7 @@ require("buffer");
 
 app.use(express.urlencoded());
 app.use(express.json());
+app.use(express.bodyParser());
 
 app.get("/", function(req, res, next)
 {
@@ -54,6 +55,19 @@ function main()
 			res.send("OK");
 		}
 	});
+
+	app.post("/upload_data", function(req, res, next)
+	{
+		console.log("Upload SemanticVideo");
+		if(req.is("application/json"))
+		{
+			var json_data = req.body
+			console.log(json_data);
+			parse_json_data(req, json_data);
+			res.send("OK");
+		}
+	});
+
 
 	app.get("/search", function(req, res)
 	{
@@ -177,6 +191,40 @@ function main()
 
 	server.listen(9999);
 	console.log("Server started");
+
+
+	function parse_json_data(req, json)
+	{
+		console.log(json);
+		obj = JSON.parse(json);
+		// var video=new SemanticVideo({
+		// 	json: json,
+		// 	filename: files.video[0].path.split("/").pop(),
+		// 	path: files.video[0].path,
+		// 	created_at: Date.now(),
+		// 	title: null,
+		// 	genre: null,
+		// 	creator: null
+		// });
+
+		// var xmld=new libxml.parseXml(video.xml);
+		// video.title=xmld.get("title").text();
+		// video.genre=xmld.get("genre").text();
+		// video.creator=xmld.get("creator").text();
+
+		// // Replace local video_uri with server's uri
+		// var uri=url.format({
+		// 	protocol: req.protocol,
+		// 	hostname: req.host,
+		// 	port: server.address().port,
+		// 	pathname: "watch/" + video.filename
+		// });
+		// xmld.get("video_uri").text(uri);
+		// video.xml=xmld.toString(false); // Do not format the xml output
+
+		// console.log("Adding new video to database:\nTitle: " + video.title + "\nGenre: " + video.genre);
+		// video.save();
+	}
 
 	function parse_video_data(req, err, fields, files)
 	{
