@@ -585,6 +585,66 @@ function main()
 		});
 	});
 
+	app.post("/api/add_video_to_community", function(req, res) {
+		console.log("Add video to community");
+		if (!is_valid_authentication(req, res)) return;
+		var community_id = req.body.community_id;
+		var video_key = req.body.video_key;
+		if (community_id == null || video_key == null) {
+			console.log(community_id)
+			console.log(video_key)
+			res.send(BAD_DATA, "Missing required fields");
+			return;
+		}
+		Community.findOne({key:community_id}, function (err, community) {
+			if (err!=null) {
+				console.log(err);
+				res.send(SERVER_ERROR, "Joining failed, community not found");
+				return;						
+			}
+			if (community.videos.indexOf(video_key) == -1) {
+				community.videos.push(video_id);
+				community.save();
+				res.send(OK, "OK");
+				return;
+			} else {
+				res.send(OK, "Already a member");
+				return;				
+			}				
+		});
+	});
+
+	app.post("/api/remove_video_from_community", function(req, res) {
+		console.log("Remove video from community");
+		if (!is_valid_authentication(req, res)) return;
+		var community_id = req.body.community_id;
+		var video_key = req.body.video_key;
+		if (community_id == null || video_key == null) {
+			console.log(community_id)
+			console.log(video_key)
+			res.send(BAD_DATA, "Missing required fields");
+			return;
+		}
+		Community.findOne({key:community_id}, function (err, community) {
+			if (err!=null) {
+				console.log(err);
+				res.send(SERVER_ERROR, "Adding video failed, community not found");
+				return;						
+			}
+			var i = community.videos.indexOf(video_key);
+			if (i == -1) {
+				res.send(OK, "Video not in community");
+				return;				
+			} else {
+				community.videos.splice(i, 1);
+				community.save();
+				res.send(OK, "OK");
+				return;
+			}				
+		});
+	});
+
+
 	// other  ////////////////////////////////////////////
 
 	app.get("*", function(req, res)
@@ -769,11 +829,29 @@ function main()
 			location: location,
 			duration: data.duration,
 			thumb_uri: data.thumb_uri,
+			communities: data.communities,
 			changed_at: new Date().getTime()
 		});
 		console.log("Adding new video to database:\nTitle: " + video.title + "\nGenre: " + video.genre);
-		// I assume there is an error if I try the video with same key twice. Let's test it.
+
 		video.save();
+
+		// Add video to communities if such are given. After this initial creation these things are done through community api
+		if (data.communities != null) {
+			for (var i=0; i<data.communities.length; i++) {
+				c_id = data.communities[i];
+				Community.findOne({key:c_id}, function (err, community) {
+					if (err != null) {
+						console.log(err);
+					} else {
+						if (community.videos.indexOf(video_key) == -1) {
+							community.videos.push(video_id);
+							community.save();
+						}
+					}
+				});
+			}
+		}
 	}
 		// var video=new SemanticVideo({
 		// 	json: json,
