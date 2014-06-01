@@ -15,7 +15,7 @@ require("buffer");
 var OK = 200;
 var UNAUTHORIZED = 401;
 var PAGE_NOT_FOUND = 404;
-var BAD_DATA = 405; // ??? fix this
+var BAD_DATA = 400; 
 var BAD_DATA_FORMAT = 406;
 var SERVER_ERROR = 500;
 
@@ -48,7 +48,7 @@ function main()
 		duration: Number,
 		thumb_uri: String,
 		changed_at: {type: Date, index: true},
-		communities: [String],
+		communities: {type: [String], index: true},
 		last_version: Number // used to avoid conflicts when editing
 	});
 
@@ -88,6 +88,19 @@ function main()
 
 	// Video browsing and search methods  ////////////////////////////////////////////
 
+	/* 
+	get_videos_in_community
+	    Return metadata of videos in community. User must be a member in community to get listing 
+	    Request: GET
+	    URL: http://???/get_videos_in_community
+	    What is sent:
+	        community_id:"xx":String,
+	    headers: 
+	        "X-auth-token":$token 
+	        "Accept":"application/json" 
+	    What is received:
+	        JSON list of semantic video object
+	*/
 	app.get("/api/get_videos_in_community", function(req, res) {
 		console.log("Get videos in community");
 		if (!is_valid_authentication(req, res)) return;
@@ -98,6 +111,7 @@ function main()
 			video_search(res, query);
 		}
 	});
+
 
 	app.get("/api/get_my_videos", function(req, res) {
 		console.log("Get videos of this person");
@@ -156,7 +170,39 @@ function main()
 		});
 	});
 
+	/* 
+	get_videos
+	    General interface for receiving list of videos that fill given conditions. 
+	    For searches, searches should also look into annotations and return videos that include matching annotations.
+	    Even if community is empty, results should be filtered by those communities that the user can see.
+	    Recommended for: 
 
+	    
+	    Request: GET
+	    URL: http://???/get_videos
+	    What is sent:
+	        keywords may include subset of following:
+	        search:"searchstring":String,
+	        by_user:"username":String,
+	        community: "community_key":String,
+	        genre: "genre_id":String,
+	        batch_size: 30(default):Number,
+	        result_page: 1(default):Number,
+	        sort_by:"date"(default)|"most_views", 
+	        sort_order:(default)descending|ascending
+
+
+	        name:"community_name":String, 
+	        listed:true|false|1|0:Boolean, 
+	        open:true|false|1|0:Boolean,
+	        moderators:[user_id,]<String> 
+	    headers: 
+	        "X-auth-token":$token 
+	        "Accept":"application/json" 
+
+	    What is received:
+	        unique id of community, or empty if it already exists
+	*/
 	app.get("/api/get_videos", function (req, res) {
 
 	});
@@ -193,6 +239,17 @@ function main()
 
 	// Upload / edit videos  ////////////////////////////////////////////
 
+	/* 
+	get_unique_id
+	    Returns a new unique id. Semantic video can safely use this as an identifier and this identifier is used as a key to retrieve video metadata and annotations, and to retrieve the state of the video encoding process. 
+	    Request: GET
+	    What is sent: nothing
+	    headers:
+	        "X-auth-token":$token
+	    returns:
+	        200: unique id string, e.g: e0c3da80-e4cc-11e3-890e-5f6eb36c1ac9
+
+	*/
 	app.get("/api/get_unique_id", function(req, res) {
 		console.log("Asking for a new key");
 		var key = uuid.v1();
@@ -201,6 +258,108 @@ function main()
 	});
 
 
+	/*
+	upload_video_metadata
+	    This is used to upload annotations and metadata for video. This is done before sending the actual video file, but the video uri and thumb uri have placeholders instead of actual values. When upload_video is completed, Ach so! polls server with get_processing_state until it receives 'finished' state as response, and then does update_metadata with new uri values.
+
+	    Ach saves to its local preferences when unfinished video processing polling is activated, so that it can continue and finalize the video metadata next time Ach so is launched, in case that the Ach so is shut down while the processing in server side is still going on.   
+
+	    Communities is a list of community uids/keys. Usually adding and removing video to/from community is done through community api methods, but it is here for convenience, so that video can be created and shared with one call. 
+
+	    Request: POST.
+	    URL: http://???/upload_video_metadata
+	    What is sent: "data" as UTF-8 StringEntity. 
+	    headers: 
+	        "X-auth-token":$token 
+	        "Content-type":"application/json" 
+	        "Accept":"application/json" 
+
+	        data is json-representation of SemanticVideo:
+	        SemanticVideo = json_object({
+	            title: String,
+	            creator: String,
+	            qr_code: String,
+	            created_at: Number,
+	            video_uri: String,
+	            genre: String,
+	            key: String,
+	            latitude: Number,
+	            longitude: Number,
+	            accuracy: Number,
+	            duration: Number,
+	            thumb_uri: String,
+	            communities: String[],
+	            annotations: Annotation[]
+	            })
+
+	        where each Annotation = {
+	            creator: String,
+	            start_time: Number,
+	            position_x: Number,
+	            position_y: Number,
+	            text: String,
+	            scale: Number,
+	            key: String
+	        }
+
+	        In server side annotations should be saved as individual objects that have a reference to semantic video they belong to. It is easier to avoid conflicts when updating annotations. Annotation keys have form 'A{$random-prefix}-$video_key'.
+
+	    What is received: 
+	        200: Success.
+	        404: URL not found.
+	        401: Unauthorized.
+	        500: Server Error.
+
+	    example:
+
+	        json = "{
+	            'title': '1st video of Friday',
+	            'creator': 'Jukka',
+	            'qr_code': 'http://learning-layers.eu/',
+	            'created_at': 1399550703652,
+	            'video_uri': '',
+	            'genre': 'Good work',
+	            'key': 'ea901369-3ae0-42c6-aece-41151e474472',
+	            'latitude': null,
+	            'longitude': null,
+	            'accuracy': null,
+	            'duration': 324993,
+	            'thumb_uri': '',
+	            'communities': ['public'],
+	            'annotations': [
+	                {
+	                'creator': 'Jukka',
+	                'start_time': 12003,
+	                'position_x': 0.33,
+	                'position_y': 0.7,
+	                'scale': 1.2,
+	                'text': 'I made a scratch here.',
+	                'key': 'A2f-ea901369-3ae0-42c6-aece-41151e474472'
+	                },
+	                {
+	                'creator': 'Jukka',
+	                'start_time': 22003,
+	                'position_x': 0.63,
+	                'position_y': 0.12,
+	                'scale': 1.0,
+	                'text': 'Good seam.',
+	                'key': 'A36-ea901369-3ae0-42c6-aece-41151e474472'
+	                }
+	            ]
+
+	        }";
+
+	        HttpPost httppost = new HttpPost("http://merian.informatik.rwth-aachen.de:5080/AchSoServer/rest/upload_video_metadata");        
+	        httppost.setHeader("X-auth-token", "04ef789a010c6f252a9f572347cac345");
+	        httppost.setHeader("Content-type", "application/json");
+	        httppost.setHeader("Accept":"application/json");
+	        StringEntity se = new StringEntity(json, "UTF-8");
+	        httppost.setEntity(se);
+	        ...
+	        httpclient.execute(httppost);
+	        ...
+
+	*/
 	app.post("/api/upload_video_metadata", function(req, res, next)
 	{
 		console.log("Upload SemanticVideo");
@@ -223,15 +382,66 @@ function main()
 		}
 	});
 
+	/*
+	update_video_metadata
+	    Update some of the fields of the video -- those that are included in the sent json object (excluding 'key', it cannot be changed, it is used to find what video to change.). It is otherwise similar to upload_metadata. Annotations are not updated through this, they use 
+	    update_annotation or upload_annotation, with a video_key to link them to this video.
+	     
+	    Request: POST.
+	    URL: http://???/update_video_metadata
+	    What is sent: "data" as UTF-8 StringEntity. 
+	    headers: 
+	        "X-auth-token":$token 
+	        "Content-type":"application/json" 
+	        "Accept":"application/json" 
+
+	        data is partial json-representation of SemanticVideo:
+	        {
+	            key: String, **rest are optional: **
+	            title: String,
+	            creator: String,
+	            qr_code: String,
+	            created_at: Number,
+	            video_uri: String,
+	            genre: String,
+	            key: String,
+	            latitude: Number,
+	            longitude: Number,
+	            accuracy: Number,
+	            duration: Number,
+	            thumb_uri: String
+	        }
+
+	    What is received: 
+	        200: Success.
+	        404: URL not found.
+	        401: Unauthorized.
+	        500: Server Error.
+
+	    example:
+	        json = "{
+	            'key': 'ea901369-3ae0-42c6-aece-41151e474472',
+	            'video_uri': 'http://tosini.informatik.rwth-aachen.de:8134/videos/ea901369-3ae0-42c6-aece-41151e474472.mp4',
+	            'thumb_uri': 'http://tosini.informatik.rwth-aachen.de:8134/thumbnails/ea901369-3ae0-42c6-aece-41151e474472.jpg',
+	        }";
+
+	        HttpPost httppost = new HttpPost("http://merian.informatik.rwth-aachen.de:5080/AchSoServer/rest/upload_video_metadata");        
+	        httppost.setHeader("X-auth-token", "04ef789a010c6f252a9f572347cac345");
+	        httppost.setHeader("Content-type", "application/json");
+	        httppost.setHeader("Accept":"application/json");
+	        StringEntity se = new StringEntity(json, "UTF-8");
+	        httppost.setEntity(se);
+	        ...
+	        httpclient.execute(httppost);
+	        ...
+
+	*/
 	app.post("/api/update_video_metadata", function(req, res) {
 		console.log("Update SemanticVideo");
 		if(req.is("application/json"))
 		{
 			var data = req.body
 			console.log(data);
-			// first we should check if there is semantic object with same key.
-			// if such exists, update it with new values.
-			// if not, then we create new object.
 			var update_obj = {};
 			var do_update = false;
 			if (data.title != null) {
@@ -266,6 +476,9 @@ function main()
 				update_obj.location = [data.longitude, data.latitude];
 				do_update = true;
 			}
+			if (data.communities != null) {
+				update_obj.communities = data.communities;
+			}
 			if (data.key == null) {
 				do_update = false;
 			}
@@ -288,7 +501,63 @@ function main()
 
 	// Upload/edit annotations  ////////////////////////////////////////////
 
+	/*
+	upload_annotation
+	    This is used to upload new annotation for existing video. 
 
+	    Request: POST.
+	    URL: http://???/upload_annotation
+	    What is sent: "data" as UTF-8 StringEntity. 
+	    headers: 
+	        "X-auth-token":$token 
+	        "Content-type":"application/json" 
+	        "Accept":"application/json" 
+
+	        data is a json-representation of Annotation:
+
+	        Annotation = {
+	            creator: String,
+	            start_time: Number,
+	            position_x: Number,
+	            position_y: Number,
+	            text: String,
+	            scale: Number,
+	            key: String,
+	            video_key: String,
+	        }
+
+	        Annotation keys have form 'A{$random-prefix}-$video_key'.
+
+	    What is received: 
+	        200: Success.
+	        404: URL not found.
+	        401: Unauthorized.
+	        500: Server Error.
+
+	    example:
+
+	        json = "{
+	                'creator': 'Jukka',
+	                'start_time': 12003,
+	                'position_x': 0.33,
+	                'position_y': 0.7,
+	                'scale': 1.2,
+	                'text': 'I made a scratch here.',
+	                'key': 'A2f-ea901369-3ae0-42c6-aece-41151e474472',
+	                'video_key': 'ea901369-3ae0-42c6-aece-41151e474472'
+	        }";
+
+	        HttpPost httppost = new HttpPost("http://merian.informatik.rwth-aachen.de:5080/AchSoServer/rest/upload_annotation");        
+	        httppost.setHeader("X-auth-token", "04ef789a010c6f252a9f572347cac345");
+	        httppost.setHeader("Content-type", "application/json");
+	        httppost.setHeader("Accept":"application/json");
+	        StringEntity se = new StringEntity(json, "UTF-8");
+	        httppost.setEntity(se);
+	        ...
+	        httpclient.execute(httppost);
+	        ...
+
+	*/
 	app.post("/api/upload_annotation", function(req, res) {
 		console.log("Upload Annotation");
 		if(req.is("application/json"))
@@ -314,6 +583,54 @@ function main()
 		}
 	});
 
+	/*
+	update_annotation
+	    This is used to update attributes of existing annotation. Attributes are given as JSON object, and it needs only to include those fields that have changed.
+
+	    Request: POST.
+	    URL: http://???/update_annotation
+	    What is sent: "data" as UTF-8 StringEntity. 
+	    headers: 
+	        "X-auth-token":$token 
+	        "Content-type":"application/json" 
+	        "Accept":"application/json" 
+
+	        data is a json-representation of Annotation:
+
+	        Annotation = {
+	            key: String, *** Rest are optional: ***
+	            creator: String,
+	            start_time: Number,
+	            position_x: Number,
+	            position_y: Number,
+	            text: String,
+	            scale: Number,
+	        }
+
+	    What is received: 
+	        200: Success.
+	        404: URL not found.
+	        401: Unauthorized.
+	        500: Server Error.
+
+	    example:
+
+	        json = "{
+	                'key': 'A2f-ea901369-3ae0-42c6-aece-41151e474472',
+	                'position_x': 0.6,
+	                'position_y': 0.2
+	        }";
+
+	        HttpPost httppost = new HttpPost("http://merian.informatik.rwth-aachen.de:5080/AchSoServer/rest/upload_annotation");        
+	        httppost.setHeader("X-auth-token", "04ef789a010c6f252a9f572347cac345");
+	        httppost.setHeader("Content-type", "application/json");
+	        httppost.setHeader("Accept":"application/json");
+	        StringEntity se = new StringEntity(json, "UTF-8");
+	        httppost.setEntity(se);
+	        ...
+	        httpclient.execute(httppost);
+	        ...
+	*/
 	app.post("/api/update_annotation", function(req, res) {
 		console.log("Update Annotation");
 		if(req.is("application/json"))
@@ -365,6 +682,18 @@ function main()
 		}
 	});
 
+	/* 
+	get_annotations
+	    List of annotations for given video_key 
+	    Request: GET
+	    URL: http://???/get_annotations
+	    What is sent: 
+	        video_key:String  
+	    headers: 
+	        "X-auth-token":$token 
+	    What is received:
+	        JSON list of annotation objects, not ordered in any meaningful way
+	*/
 	app.get("/api/get_annotations", function(req, res) {
 		console.log("Get annotations");
 		if (!is_valid_authentication(req, res)) return;
@@ -386,6 +715,24 @@ function main()
 
 	// Community operations  ////////////////////////////////////////////
 
+	/*
+	add_community
+	    Create a community that has access to videos 
+	    Request: POST.
+	    URL: http://???/add_community
+	    What is sent: 
+	        JSON object, where:  
+	        name:"name":String, 
+	        listed:true|false|1|0:Boolean, 
+	        open:true|false|1|0:Boolean,
+	        moderators:[user_id,]:<String> 
+	    headers: 
+	        "X-auth-token":$token 
+	        "Accept":"application/json" 
+
+	    What is received:
+	        unique id of community, or empty if it already exists
+	*/
 	app.post("/api/add_community", function(req, res) {
 		console.log("Add community");
 		if (!is_valid_authentication(req, res)) return;
@@ -451,6 +798,25 @@ function main()
 		}
 	});
 
+	/*
+	edit_community
+	    Change community settings, only by moderator 
+	    Request: POST.
+	    URL: http://???/edit_community
+	    What is sent:
+	        JSON object, where key is mandatory and others are optional:
+	        key:"stringid":String,
+	        name:"community_name":String, 
+	        listed:true|false|1|0:Boolean, 
+	        open:true|false|1|0:Boolean,
+	        moderators:[user_id,]<String> 
+	    headers: 
+	        "X-auth-token":$token 
+	        "Accept":"application/json" 
+
+	    What is received:
+	        unique id of community, or empty if it already exists
+	*/
 	app.post("/api/edit_community", function(req, res) {
 		console.log("Edit community");
 		if (!is_valid_authentication(req, res)) return;
@@ -497,6 +863,22 @@ function main()
 		}
 	});
 
+	/*
+	join_community
+	    Join user xx to a community. If closed community, this is done by authenticated user who is a moderator. Username for authenticated user is retrievable from X-auth-token?
+	    
+	    Request: POST.
+	    URL: http://???/join_community
+	    What is sent: 
+	        name:"community_uid":String, 
+	        user_id:"xx":String
+	    headers: 
+	        "X-auth-token":$token 
+	        "Accept":"application/json" 
+
+	    What is received:
+	        "success" or "not allowed"
+	*/
 	app.post("/api/join_community", function(req, res) {
 		console.log("Join community");
 		if (!is_valid_authentication(req, res)) return;
@@ -526,6 +908,22 @@ function main()
 		});
 	});
 
+	/*
+	leave_community
+	    Leave from a community. User xx is removed from community. There should be checks that the X-auth-token points to same user xx or to a moderator?
+	    
+	    Request: POST.
+	    URL: http://???/leave_community
+	    What is sent: 
+	        name:"community_uid":String, 
+	        user_id:"xx":String
+	    headers: 
+	        "X-auth-token":$token 
+	        "Accept":"application/json" 
+
+	    What is received:
+	        "success" or "not allowed"
+	*/
 	app.post("/api/leave_community", function(req, res) {
 		console.log("Leave community");
 		if (!is_valid_authentication(req, res)) return;
@@ -560,6 +958,21 @@ function main()
 		});
 	});
 
+	/*
+	get_communities
+	    Return a list of listable communities (no arguments), or list of provided user_id:s communities. List is a json object 
+	    Request: GET
+	    URL: http://???/get_communities
+	    What is sent: 
+	        user_id:"xx":String (optional)
+	    headers: 
+	        "X-auth-token":$token 
+	        "Accept":"application/json" 
+
+	    What is received:
+	        [{name:String, key:String, open:Boolean, listed:Boolean, is_member:Boolean, is_moderator},... ]
+	        notice that if user_id is not given, is_member and is_moderator can default to false.
+	*/
 	app.get("/api/get_communities", function(req, res) {
 		console.log("Get communities");
 		if (!is_valid_authentication(req, res)) return;
@@ -585,6 +998,22 @@ function main()
 		});
 	});
 
+	/*
+	add_video_to_community
+	    Add a video to belong for a community. It is then visible for community members Requires video_key and community_id as arguments. 
+	    Request: POST.
+	    URL: http://???/add_video_to_community
+	    What is sent: 
+	        name:"community_id":String, 
+	        video_key:"xx":String
+	    headers: 
+	        "X-auth-token":$token 
+	        "Accept":"application/json" 
+
+	    What is received:
+	        "success" or "not allowed"
+
+	*/
 	app.post("/api/add_video_to_community", function(req, res) {
 		console.log("Add video to community");
 		if (!is_valid_authentication(req, res)) return;
@@ -599,21 +1028,48 @@ function main()
 		Community.findOne({key:community_id}, function (err, community) {
 			if (err!=null) {
 				console.log(err);
-				res.send(SERVER_ERROR, "Joining failed, community not found");
+				res.send(SERVER_ERROR, "Adding failed, community not found");
 				return;						
 			}
 			if (community.videos.indexOf(video_key) == -1) {
 				community.videos.push(video_id);
 				community.save();
-				res.send(OK, "OK");
-				return;
 			} else {
-				res.send(OK, "Already a member");
-				return;				
-			}				
+				console.log("Already a member");				
+			}
+			Video.findOne({key:video_key}, function (err, video) {
+				if (err!=null) {
+					console.log(err);
+					res.send(SERVER_ERROR, "Adding failed, video not found");
+					return;
+				}
+				if (video.communities.indexOf(community_id) == -1) {
+					video.communities.push(community_id);
+					video.save();
+					res.send(OK, 'ok');					
+				} else {
+					res.send(OK, 'community already listed for video');		
+				}
+				return;
+			});				
 		});
 	});
 
+	/* 
+	remove_video_from_community
+	    Video is no longer listed as belonging to a community. Requires video_key and community_id as arguments. 
+	    Request: POST.
+	    URL: http://???/remove_video_from_community
+	    What is sent: 
+	        name:"community_id":String, 
+	        video_key:"xx":String
+	    headers: 
+	        "X-auth-token":$token 
+	        "Accept":"application/json" 
+
+	    What is received:
+	        "success" or "not allowed"
+	*/
 	app.post("/api/remove_video_from_community", function(req, res) {
 		console.log("Remove video from community");
 		if (!is_valid_authentication(req, res)) return;
@@ -633,14 +1089,28 @@ function main()
 			}
 			var i = community.videos.indexOf(video_key);
 			if (i == -1) {
-				res.send(OK, "Video not in community");
-				return;				
+				console.log("Video not in community");
 			} else {
 				community.videos.splice(i, 1);
 				community.save();
-				res.send(OK, "OK");
-				return;
 			}				
+			Video.findOne({key:video_key}, function (err, video) {
+				if (err!=null) {
+					console.log(err);
+					res.send(SERVER_ERROR, "Adding failed, video not found");
+					return;
+				}
+				i = video.communities.indexOf(community_id);
+				if (i == -1) {
+					res.send(OK, 'community already removed from video');							
+				} else {
+					video.communities.splice(i, 1);
+					video.save();
+					res.send(OK, 'ok');				
+				}
+				return;
+			});				
+
 		});
 	});
 
@@ -797,19 +1267,21 @@ function main()
 
 	function create_new_video_from_data(data) {
 		var annotation, adata, _id, location;
-		for (var i=0; i< data.annotations.length; i++) {
-			adata = data.annotations[i];
-			annotation = new Annotation({
-				creator: adata.creator,
-				start_time: adata.start_time,
-				position_x: adata.position_x,
-				position_y: adata.position_y,
-				text: adata.text,
-				scale: adata.scale,
-				video_key: data.key
-			});
-			annotation.save();
-		} 
+		if (data.annotataions != null) {
+			for (var i=0; i< data.annotations.length; i++) {
+				adata = data.annotations[i];
+				annotation = new Annotation({
+					creator: adata.creator,
+					start_time: adata.start_time,
+					position_x: adata.position_x,
+					position_y: adata.position_y,
+					text: adata.text,
+					scale: adata.scale,
+					video_key: data.key
+				});
+				annotation.save();
+			} 			
+		}
 
 		if (data.latitude != null && data.longitude != null) {
 			location = [data.longitude, data.latitude];
