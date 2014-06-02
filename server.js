@@ -120,6 +120,8 @@ function main()
 		if (user_id != null) {
 			query = {'creator':user_id}; 
 			video_search(res, query);
+		} else {
+			res.send(OK, []);
 		}
 	});
 
@@ -1242,7 +1244,7 @@ function main()
 		if (psize != null) size = psize;
 		if (ppage != null) page = ppage;
 
-		query = SemanticVideo.find(query_params).query.sort(sort).skip(page*size).limit(size).lean(true);
+		query = SemanticVideo.find(query_params).sort(sort).skip(page*size).limit(size).lean(true);
 		query.exec(function (err, results) {
 			if (err!=null) {
 				console.log(err);
