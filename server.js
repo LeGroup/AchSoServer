@@ -43,7 +43,7 @@ function main()
 		created_at: Date,
 		video_uri: String,
 		genre: String,
-		key: {type: String, index: true},
+		key: {type: String, index: true, unique:true},
 		location: { type: [Number], index: { type: '2dsphere', sparse: true }}, 
 		duration: Number,
 		thumb_uri: String,
@@ -68,7 +68,7 @@ function main()
 		listed: Boolean,
 		open: Boolean,
 		name: String,
-		key: {type: String, index: true}
+		key: {type: String, index: true, unique:true}
 	});
 
 	// Let's try to keep user away from db, as it can esaily come from different source.
